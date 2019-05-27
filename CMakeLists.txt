@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 2.8)
 project(Sztywny-Projekt)
 
+# setup ZED
+option(LINK_SHARED_ZED "Link with the ZED SDK shared executable" ON)
+if (NOT LINK_SHARED_ZED AND MSVC)
+    message(FATAL_ERROR "LINK_SHARED_ZED OFF : ZED SDK static libraries not available on Windows")
+endif()
+
+find_package(ZED 2 REQUIRED)
 
 # setup tensorRT flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -30,12 +37,22 @@ endif()
 
 include_directories(
     src
-    /usr/local/cuda/include
+	/usr/local/cuda/include
+	${ZED_INCLUDE_DIRS}
 )
+
+link_directories(${ZED_LIBRARY_DIR})
+link_directories(${CUDA_LIBRARY_DIRS})
 
 set(SOURCES
     src/Main.cpp
 )
 
+if (LINK_SHARED_ZED)
+    SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
+else()
+    SET(ZED_LIBS ${ZED_STATIC_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_LIBRARY})
+endif()
+
 add_executable(Main ${SOURCES})
-target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser)
+target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser ${ZED_LIBS} ${OpenCV_LIBRARIES})
