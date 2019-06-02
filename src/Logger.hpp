@@ -12,8 +12,7 @@ private:
 
     void log(Severity severity, const char* msg) override
     {
-        if (severity != Severity::kINFO)
-            printf("%s\n", msg);
+        printf("%s\n", msg);
     }
 } gLogger;
 

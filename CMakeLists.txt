@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 project(Sztywny-Projekt)
 
+# setup OpenCV
+find_package(OpenCV REQUIRED)
+
 # setup ZED
 option(LINK_SHARED_ZED "Link with the ZED SDK shared executable" ON)
 if (NOT LINK_SHARED_ZED AND MSVC)
@@ -55,4 +58,4 @@ else()
 endif()
 
 add_executable(Main ${SOURCES})
-target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser ${ZED_LIBS} ${OpenCV_LIBRARIES})
+target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser ${ZED_LIBS} ${OpenCV_LIBS})

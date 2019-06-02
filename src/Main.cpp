@@ -5,7 +5,7 @@
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
 #include <sl/Camera.hpp>
-
+#include <opencv2/opencv.hpp>
 #include "Logger.hpp"
 #include "Utils.hpp"
 
@@ -60,36 +60,99 @@ std::vector<float> prepareImage(cv::Mat& img)
     return result;
 }
 
+cv::Mat slMat2cvMat(sl::Mat& input) {
+    int cv_type = -1;
+    switch (input.getDataType())
+    {
+        case sl::MAT_TYPE_32F_C1: cv_type = CV_32FC1; break;
+        case sl::MAT_TYPE_32F_C2: cv_type = CV_32FC2; break;
+        case sl::MAT_TYPE_32F_C3: cv_type = CV_32FC3; break;
+        case sl::MAT_TYPE_32F_C4: cv_type = CV_32FC4; break;
+        case sl::MAT_TYPE_8U_C1: cv_type = CV_8UC1; break;
+        case sl::MAT_TYPE_8U_C2: cv_type = CV_8UC2; break;
+        case sl::MAT_TYPE_8U_C3: cv_type = CV_8UC3; break;
+        case sl::MAT_TYPE_8U_C4: cv_type = CV_8UC4; break;
+        default: break;
+    }
+
+    return cv::Mat(input.getHeight(), input.getWidth(), cv_type,
+        input.getPtr<sl::uchar1>(sl::MEM_CPU));
+}
+
 auto main(int argc, char** argv) -> int
 {
-    nvinfer1::IBuilder* builder = nvinfer1::createInferBuilder(gLogger);
-    nvinfer1::INetworkDefinition* network = builder->createNetwork();
-    nvonnxparser::IParser* parser = nvonnxparser::createParser(*network, gLogger);
-    bool result = parser->parseFromFile("../models/resnet152/model.onnx", 1);
-    nvinfer1::ICudaEngine* cudaEngine = builder->buildCudaEngine(*network);
-    nvinfer1::IExecutionContext* executionContext =
-        cudaEngine->createExecutionContext();
+    // nvinfer1::IBuilder* builder = nvinfer1::createInferBuilder(gLogger);
+    // nvinfer1::INetworkDefinition* network = builder->createNetwork();
+    // nvonnxparser::IParser* parser = nvonnxparser::createParser(*network, gLogger);
+    // bool result = parser->parseFromFile("../models/resnet152/model.onnx", 1);
+    // nvinfer1::ICudaEngine* cudaEngine = builder->buildCudaEngine(*network);
+    // nvinfer1::IExecutionContext* executionContext =
+    //     cudaEngine->createExecutionContext();
 
-    printf("Number of bindings: %d\n", cudaEngine->getNbBindings());
-    void* buffers[2];
-    std::vector<float> output(1000);
-    cv::Mat img = cv::imread("krowa.jpg");
-    std::vector<float> input = prepareImage(img);
+    // printf("Number of bindings: %d\n", cudaEngine->getNbBindings());
+    // void* buffers[2];
+    // std::vector<float> output(1000);
 
-    CHECK(cudaMalloc(&buffers[0], input.size() * sizeof(float)));
-    CHECK(cudaMalloc(&buffers[1], output.size() * sizeof(float)));
+    const char* gst =  "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720,format=(string)NV12, framerate=(fraction)24/1 ! nvvidconv flip-method=0 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 
-    CHECK(cudaMemcpy(buffers[0], input.data(),
-        input.size() * sizeof(float),  cudaMemcpyHostToDevice));
+    cv::VideoCapture cap(gst);
 
-    executionContext->execute(1, buffers);
+    if(!cap.isOpened())
+    {
+        std::cout<<"Failed to open camera."<<std::endl;
+        return -1;
+    }
 
-    CHECK(cudaMemcpy(output.data(), buffers[1], output.size() * sizeof(float),
-        cudaMemcpyDeviceToHost));
-    
-    int i = std::distance(output.begin(),
-        std::max_element(output.begin(), output.end()));
-    printf("Output: %d, probability: %f\n", i, output[i]);;
+    unsigned int width = cap.get(CV_CAP_PROP_FRAME_WIDTH); 
+    unsigned int height = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+    unsigned int pixels = width*height;
+    cv::Mat frame_in(width, height, cap.get(CV_CAP_PROP_FORMAT));
+
+    cv::namedWindow("MyCameraPreview", CV_WINDOW_AUTOSIZE);
+
+    while(1)
+    {
+    	if (!cap.read(frame_in))
+        {
+            std::cout<<"Capture read error"<<std::endl;
+            break;
+        }
+        else
+        {
+            // std::cout <<"Frame size : "<<width<<" x "<<height<<", "<<pixels<<" Pixels, channels: " << frame_in.channels() <<std::endl;
+            // try
+            // {
+            //     cv::cvtColor(frame_in, frame_in, CV_BGR2RGB);
+            // }
+            // catch(std::exception& e)
+            // {
+            //     cap.release();
+            // }
+            
+            cv::imshow("MyCameraPreview",frame_in);
+                cv::waitKey(1000/30); // let imshow draw and wait for next frame 8 ms for 120 fps
+        }	
+    }
+
+    cap.release();
 
     return 0;
+    // std::vector<float> input = prepareImage(img);
+
+    // CHECK(cudaMalloc(&buffers[0], input.size() * sizeof(float)));
+    // CHECK(cudaMalloc(&buffers[1], output.size() * sizeof(float)));
+
+    // CHECK(cudaMemcpy(buffers[0], input.data(),
+    //     input.size() * sizeof(float),  cudaMemcpyHostToDevice));
+
+    // executionContext->execute(1, buffers);
+
+    // CHECK(cudaMemcpy(output.data(), buffers[1], output.size() * sizeof(float),
+    //     cudaMemcpyDeviceToHost));
+    
+    // int i = std::distance(output.begin(),
+    //     std::max_element(output.begin(), output.end()));
+    // printf("Output: %d, probability: %f\n", i, output[i]);;
+
+    // return 0;
 }
