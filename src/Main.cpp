@@ -3,10 +3,14 @@
 #include <iostream>
 
 #include <cuda_runtime_api.h>
+#include <nlohmann/json.hpp>
 #include <NvInfer.h>
-#include <NvOnnxParser.h>
+#include <NvOnnxParserRuntime.h>
+#include <scorpio/network.hpp>
 #include <sl/Camera.hpp>
 #include <opencv2/opencv.hpp>
+
+#include "AcceptHandler.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
 
@@ -25,8 +29,8 @@ std::vector<float> prepareImage(cv::Mat& img)
     using namespace cv;
 
     int c = 3;
-    int h = 224;
-    int w = 224;
+    int h = 224; // img class: 224;
+    int w = 224; // img class: 224;
 
     float scale = min(float(w)/img.cols,float(h)/img.rows);
     auto scaleSize = cv::Size(img.cols * scale,img.rows * scale);
@@ -61,7 +65,8 @@ std::vector<float> prepareImage(cv::Mat& img)
     return result;
 }
 
-cv::Mat slMat2cvMat(sl::Mat& input) {
+cv::Mat slMat2cvMat(sl::Mat& input)
+{
     int cv_type = -1;
     switch (input.getDataType())
     {
@@ -105,18 +110,27 @@ std::vector<std::string> readLabels(std::string filename)
     {
         auto tokens = split(label, "'");
         std::cout << tokens[1] << std::endl;
-        labels.push_back(label);
+        labels.push_back(tokens[1]);
     }
     return labels;
 }
 
 auto main(int argc, char** argv) -> int
 {
+    std::shared_ptr<bool> tennisBallDetection = std::make_shared<bool>(false);
+    auto acceptHandler = std::make_unique<AcceptHandler>(0, tennisBallDetection);
+    std::vector<std::unique_ptr<MsgHandlerBase>> msgHandlers;
+    msgHandlers.push_back(std::move(acceptHandler));
+
+    tcp::Server server(3490);
+    auto f = std::async([&server, &msgHandlers] () { server.work(std::move(msgHandlers)); });
+
     auto labels = readLabels("../res/imagenet.txt");
     nvinfer1::IBuilder* builder = nvinfer1::createInferBuilder(gLogger);
     nvinfer1::INetworkDefinition* network = builder->createNetwork();
     nvonnxparser::IParser* parser = nvonnxparser::createParser(*network, gLogger);
-    bool result = parser->parseFromFile("../models/shufflenet/model.onnx", 1);
+    bool result = parser->parseFromFile("../models/resnet152/model.onnx", 1);
+    // network->markOutput(*network->getLayer(network->getNbLayers()-1)->getOutput(0));
     nvinfer1::ICudaEngine* cudaEngine = builder->buildCudaEngine(*network);
     nvinfer1::IExecutionContext* executionContext =
         cudaEngine->createExecutionContext();
@@ -152,7 +166,7 @@ auto main(int argc, char** argv) -> int
         }
         else
         {
-            std::vector<float> input = prepareImage(frame_in);
+            std::vector<float> input = std::move(prepareImage(frame_in));
 
             if (cudaMemAlloc == false)
             {
@@ -171,9 +185,14 @@ auto main(int argc, char** argv) -> int
             
             int i = std::distance(output.begin(),
                 std::max_element(output.begin(), output.end()));
+            if (i == 722)
+            {
+                *tennisBallDetection = true;
+            }
+            else *tennisBallDetection = false;
             printf("Output: %s probability: %f%% \n", labels[i].c_str(), output[i] * 100);
             cv::imshow("SztywnyKlasyfikator", frame_in);
-            cv::waitKey(1); // let imshow draw and wait for next frame 8 ms for 120 fps
+            cv::waitKey(1);
         }       
     }
 

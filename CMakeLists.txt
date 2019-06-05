@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
-project(Sztywny-Projekt)
+project(VisionCOre)
+
+add_compile_options(-std=c++14)
 
 # setup OpenCV
 find_package(OpenCV REQUIRED)
@@ -58,4 +60,5 @@ else()
 endif()
 
 add_executable(Main ${SOURCES})
-target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser ${ZED_LIBS} ${OpenCV_LIBS})
+target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser
+	scorpio_network pthread ${ZED_LIBS} ${OpenCV_LIBS})
