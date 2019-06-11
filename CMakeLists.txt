@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 project(VisionCOre)
 
 add_compile_options(-std=c++14)
+add_compile_options(-g)
 
 # setup OpenCV
 find_package(OpenCV REQUIRED)
@@ -50,7 +51,7 @@ link_directories(${ZED_LIBRARY_DIR})
 link_directories(${CUDA_LIBRARY_DIRS})
 
 set(SOURCES
-    src/Main.cpp
+	src/Main.cpp
 )
 
 if (LINK_SHARED_ZED)
@@ -61,4 +62,4 @@ endif()
 
 add_executable(Main ${SOURCES})
 target_link_libraries(Main nvinfer nvinfer_plugin nvonnxparser
-	scorpio_network pthread ${ZED_LIBS} ${OpenCV_LIBS})
+	pthread ${ZED_LIBS} ${OpenCV_LIBS})
